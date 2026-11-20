@@ -1,10 +1,12 @@
 
+import os
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-import yt_dlp
 
-app = FastAPI(title="ClipGenius AI Backend")
+from pipeline import process_video
+
+app = FastAPI(title="ClipGenius AI")
 
 app.add_middleware(
     CORSMiddleware,
@@ -14,41 +16,35 @@ app.add_middleware(
 )
 
 class VideoRequest(BaseModel):
-    url: str
+    video_path: str
+    clips: int = 3
+    duration: int = 45
+
 
 @app.get("/")
 def home():
-    return {"message": "ClipGenius AI Backend is running!"}
+    return {"message": "ClipGenius AI is running!"}
+
 
 @app.get("/health")
 def health():
     return {"status": "online"}
 
+
 @app.post("/analyze")
 def analyze_video(data: VideoRequest):
-    url = data.url.strip()
-
-    if "youtube.com/" not in url and "youtu.be/" not in url:
-        raise HTTPException(status_code=400, detail="Valid YouTube URL required")
-
-    options = {
-        "quiet": True,
-        "no_warnings": True,
-        "skip_download": True,
-        "socket_timeout": 30,
-    }
 
     try:
-        with yt_dlp.YoutubeDL(options) as ydl:
-            info = ydl.extract_info(url, download=False)
+        result = process_video(
+            video_path=data.video_path,
+            clip_count=data.clips,
+            duration=data.duration
+        )
 
-        return {
-            "success": True,
-            "title": info.get("title"),
-            "duration": info.get("duration"),
-            "message": "Video information received successfully"
-        }
+        return result
+
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-      
